@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI 반응 이미지 + 다양한 사운드</title>
+    <style>
+        body {
+            position: relative;
+            background-color: black;
+            overflow: hidden;
+            height: 100vh;
+            margin: 0;
+        }
+        .image {
+            position: absolute;
+            transition: opacity 1s ease-out, transform 1s ease-out, filter 1s ease-out;
+            transform-origin: center;
+            filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // 🎵 Web Audio API 설정 (다양한 사운드)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSynth(note, velocity) {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+
+            const frequency = 440 * Math.pow(2, (note - 69) / 12);
+            osc.frequency.value = frequency;
+
+            // ✅ 다양한 전자음 설정 (랜덤으로 바꾸기)
+            const waveTypes = ["sine", "square", "sawtooth", "triangle"];
+            osc.type = waveTypes[Math.floor(Math.random() * waveTypes.length)]; // 랜덤 파형 적용
+
+            gain.gain.value = velocity / 127; // 건반 세기에 따라 볼륨 조절
+
+            // ✅ 필터 추가 (부드럽거나 날카로운 소리)
+            filter.type = "lowpass"; // 저음만 통과
+            filter.frequency.value = 800 + (velocity * 5); // Velocity에 따라 필터 변화
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioContext.destination);
+
+            osc.start();
+            osc.stop(audioContext.currentTime + 0.3);
+        }
+
+        // 🎧 샘플링된 음원 (MIDI 노트별로 다른 사운드)
+        const soundMap = {
+            60: "sounds/kick.wav",
+            62: "sounds/snare.wav",
+            64: "sounds/hihat.wav",
+            65: "sounds/clap.wav",
+        };
+
+        function playSampledSound(note) {
+            if (!soundMap[note]) return;
+            const sound = new Audio(soundMap[note]);
+            sound.play();
+        }
+
+        // 🎨 이미지 관련 코드
+        const images = ["1.png", "6.png", "7.png", "8.png", "9.png"];
+
+        function getRandomImage() {
+            return images[Math.floor(Math.random() * images.length)];
+        }
+
+        function getRandomX() {
+            return Math.random() * window.innerWidth;
+        }
+
+        function getRandomY() {
+            const centerY = window.innerHeight / 2;
+            const range = window.innerHeight * 0.2;
+            return centerY + (Math.random() * range * 2 - range);
+        }
+
+        function getImageSize(velocity) {
+            return 50 + (velocity / 127) * 50;
+        }
+
+        function createImage(velocity) {
+            const img = document.createElement("img");
+            img.src = getRandomImage();
+            img.classList.add("image");
+
+            img.style.left = `${getRandomX()}px`;
+            img.style.top = `${getRandomY()}px`;
+            img.style.opacity = 0;
+            const size = getImageSize(velocity);
+            img.style.width = `${size}px`;
+            img.style.transform = `scale(0.5)`;
+            img.style.filter = "blur(10px)";
+
+            const rotationDirection = Math.random() < 0.5 ? 360 : -360;
+
+            const rotateAnimation = `rotateEffect${rotationDirection}`;
+            const styleSheet = document.styleSheets[0];
+            styleSheet.insertRule(`
+                @keyframes ${rotateAnimation} {
+                    0% { transform: scale(1) rotate(0deg); }
+                    100% { transform: scale(1) rotate(${rotationDirection}deg); }
+                }
+            `, styleSheet.cssRules.length);
+
+            img.style.animation = `${rotateAnimation} 30s linear infinite`;
+
+            document.body.appendChild(img);
+
+            setTimeout(() => {
+                img.style.opacity = 1;
+                img.style.transform = `scale(1)`;
+                img.style.filter = "blur(0px)";
+            }, 10);
+
+            setTimeout(() => {
+                img.style.opacity = 0;
+                img.style.transform = `scale(1.2) rotate(${rotationDirection * 2}deg)`;
+                img.style.filter = "blur(10px)";
+                setTimeout(() => img.remove(), 1000);
+            }, 5000);
+        }
+
+        // 🎛 MIDI 입력 감지 + 다양한 사운드 추가
+        function onMIDIMessage(event) {
+            const [command, note, velocity] = event.data;
+            if (command === 144 && velocity > 0) {
+                createImage(velocity);
+                playSynth(note, velocity); // 전자음 추가
+                playSampledSound(note); // 샘플링 사운드 추가
+            }
+        }
+
+        function initMIDI() {
+            navigator.requestMIDIAccess().then(midiAccess => {
+                midiAccess.inputs.forEach(input => {
+                    input.onmidimessage = onMIDIMessage;
+                });
+            }).catch(err => console.error("MIDI 접근 오류:", err));
+        }
+
+        window.onload = initMIDI;
+    </script>
+</body>
+</html>
